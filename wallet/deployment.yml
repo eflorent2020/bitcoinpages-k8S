@@ -1,0 +1,106 @@
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: wallet
+  namespace: wallet  
+  labels:
+    app: wallet
+spec:
+  template:
+    metadata:
+      labels:
+        app: wallet
+        tier: web
+    spec:
+      containers:
+        - name: webwallet
+          image: gcr.io/bitcoinpages-185710/wallet:v1
+          imagePullPolicy: "Always"
+          ports:
+            - containerPort: 4567
+          env:
+            - name: MYSQL_JDBC_URL
+              value: jdbc:mariadb://localhost:3306/polycaste
+            - name: NETWORK
+              value: testnet
+            - name: BITCOIND
+              value: localhost 
+            - name: MYSQL_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: cloudsql-db-credentials
+                  key: username
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: cloudsql-db-credentials
+                  key: password
+
+          resources:
+            limits:
+              cpu: 1000m
+              memory: 1000Mi
+            requests:
+              cpu: 10m
+              memory: 100Mi  
+          volumeMounts:
+            - name: btct-persistent-storage
+              mountPath: /root/.bitcoin/
+
+        - name: cloudsql-proxy
+          image: gcr.io/cloudsql-docker/gce-proxy:1.11
+          command: ["/cloud_sql_proxy", "--dir=/cloudsql",
+                    "-instances=bitcoinpages-185710:us-central1:mysql=tcp:3306",
+                    "-credential_file=/secrets/cloudsql/credentials.json"]
+          volumeMounts:
+            - name: cloudsql-instance-credentials
+              mountPath: /secrets/cloudsql
+              readOnly: true
+            - name: ssl-certs
+              mountPath: /etc/ssl/certs
+            - name: cloudsql
+              mountPath: /cloudsql
+
+        - image: gcr.io/bitcoinpages-185710/bitcoind:v1
+          imagePullPolicy: "Always"
+          name: btct
+          args: ["-testnet=1"]
+          env:
+          - name: TESTNET
+            value: -testnet
+          - name: NODE_CENTRAL
+            value: http://localhost:4567/nodecentral
+          - name: BITCOIN_RPC_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: cloudsql-db-credentials
+                key: password
+
+          ports:
+            - containerPort: 18332
+              name: btcd1
+            - containerPort: 18333
+              name: btcd2
+          volumeMounts:
+            - name: btct-persistent-storage
+              mountPath: /home/bitcoin/.bitcoin
+          resources:
+            limits:
+              cpu: 1000m
+              memory: 1000Mi
+            requests:
+              cpu: 10m
+              memory: 100Mi  
+      volumes:
+        - name: cloudsql-instance-credentials
+          secret:
+            secretName: cloudsql-instance-credentials
+        - name: cloudsql
+          emptyDir:
+        - name: ssl-certs
+          hostPath:
+            path: /etc/ssl/certs
+        - name: btct-persistent-storage
+          gcePersistentDisk:
+            pdName: btct-disk
+            fsType: ext4

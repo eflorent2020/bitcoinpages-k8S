@@ -1,0 +1,6 @@
+#!/bin/bash -e
+
+DATE=`date +%Y-%m-%d`
+
+bitcoin-cli $TESTNET gettransaction $1 | curl -d @- http://$WEBWALLET_SERVICE_HOST:$WEBWALLET_SERVICE_PORT/nodecentral
+

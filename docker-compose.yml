@@ -1,0 +1,114 @@
+version: '2'
+services:
+  bitcoindtest:
+    container_name: bitcoind-testnet
+    build: docker/bitcoind
+    image: gcr.io/bitcoinpages-185710/bitcoind:v1
+    ports:
+      - "18332:18332"
+      - "18333:18333"
+    expose:
+      - "18332"
+      - "18333"
+    volumes:
+      - /opt/data/bitcoin-testnet:/home/bitcoin/.bitcoin
+    env_file:
+      - .env
+    environment:
+      - TESTNET=-testnet=1
+    command:
+      -testnet
+
+  bitcoindmain:
+    container_name: bitcoind-mainnet
+    build: docker/bitcoind
+    image: gcr.io/bitcoinpages-185710/bitcoind:v1
+    ports:
+      - "8332:8332"
+      - "8333:8333"
+    expose:
+      - "8332"
+      - "8333"
+    volumes:
+      - /opt/data/bitcoin-mainnet:/home/bitcoin/.bitcoin
+    env_file:
+      - .env
+    command:
+      -testnet=0
+
+  electrumxmain:
+    container_name: electrumx-mainnet
+    image: lukechilds/electrumx
+    ports:
+      - "50002:50002"
+    expose:
+      - "50002"
+    volumes:
+      - /opt/data/electrumx-mainnet:/data
+    environment:
+      - COIN=BitcoinSegwit
+      - NET=mainnet
+      - DAEMON_URL=http://${BITCOIN_RPC_USER}:${BITCOIN_RPC_PASSWORD}@${PRIVATE_IP}:8332
+
+  electrumxtestnet:
+    container_name: electrumx-testnet
+    image: lukechilds/electrumx
+    ports:
+      - "51002:51002"
+    expose:
+      - "51002"
+    volumes:
+      - /opt/data/electrumx-testnet:/data
+    environment:
+      - COIN=BitcoinSegwit
+      - NET=testnet
+      - TCP_PORT=51001
+      - SSL_PORT=51002
+      - DAEMON_URL=http://${BITCOIN_RPC_USER}:${BITCOIN_RPC_PASSWORD}@${PRIVATE_IP}:18332
+
+
+
+  nginx-proxy:
+    container_name: https-portal
+    image: steveltn/https-portal
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - /opt/data/ssl_certs:/var/lib/https-portal
+      - /var/log/nginx:/var/log/nginx
+      - /etc/nginx/nginx.conf.erb:/var/lib/nginx-conf/nginx.conf.erb:ro
+      - /etc/nginx/default.ssl.conf.erb:/var/lib/nginx-conf/default.ssl.conf.erb:ro
+    environment:
+      - STAGE=production
+      - DOMAINS= wallet.bitcoinpage.org -> http://wallet:4567/
+
+  wallet:
+    container_name: wallet
+    build: .
+    image: gcr.io/bitcoinpages-185710/wallet:v1
+    env_file:
+      - .env
+    environment:
+      - VIRTUAL_HOST=wallet.bitcoinpage.org
+      - VIRTUAL_PORT=4567
+      - WEBSOCKET=true
+    ports:
+      - "4567:4567"
+    volumes:
+      - /root/dbkey:/opt/data/dbkey
+
+  bitcoinpage:
+    build: ./bitcoinpages-home
+    container_name: bitcoinpages-home
+    image: gcr.io/bitcoinpages-185710/bitcoinpages-home:v1    
+    env_file:
+      - .env
+    environment:
+      - VIRTUAL_HOST=www.bitcoinpage.org
+      - VIRTUAL_PORT=2368
+    ports:
+      - "2368:2368"
+    volumes:
+     - /opt/data/ghost:/usr/src/bitcoinpage-home/node_modules/ghost/content
+

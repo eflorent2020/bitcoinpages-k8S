@@ -1,0 +1,23 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: wallet
+  namespace: wallet
+  annotations:
+    kubernetes.io/tls-acme: "true"
+    kubernetes.io/ingress.class: "nginx"
+    #kubernetes.io/ingress.class: "gce"
+    kubernetes.io/ingress.global-static-ip-name: "bitcoinpages-ip"
+spec:
+  tls:
+  - hosts:
+    - wallet.bitcoinpages.io
+    secretName: wallet-tls
+  rules:
+  - host: wallet.bitcoinpages.io
+    http:
+      paths:
+      - backend:
+          serviceName: wallet
+          servicePort: 80
+        path: /
